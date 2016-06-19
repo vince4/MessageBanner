@@ -402,7 +402,7 @@ static struct delegateMethodsCaching {
                                                                                multiplier:1.0f
                                                                                  constant:0.0f]];
             } else {
-                if (realViewController.navigationController.navigationBar != nil) {
+                if (realViewController.topLayoutGuide == nil && realViewController.navigationController.navigationBar != nil) {
                     // This is a hack!!! iOS 9 the topLayoutGuide goes away and shows as nil in Reveal
                     [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:realViewController.navigationController.navigationBar
                                                                                     attribute:NSLayoutAttributeBottom
