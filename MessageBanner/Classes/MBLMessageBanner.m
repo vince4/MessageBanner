@@ -411,7 +411,7 @@ static struct delegateMethodsCaching {
                                                                                     attribute:NSLayoutAttributeTop
                                                                                    multiplier:1.0f
                                                                                      constant:0.0f]];
-                } else {
+                } else if(realViewController.topLayoutGuide != nil) {
                     [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:realViewController.topLayoutGuide
                                                                                     attribute:NSLayoutAttributeBottom
                                                                                     relatedBy:NSLayoutRelationEqual
