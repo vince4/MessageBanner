@@ -162,22 +162,7 @@ static struct delegateMethodsCaching {
 #pragma mark Show methods
 
 + (void)showMessageBanner:(MBLMessageBannerView *)messageBannerView {
-
-
-    // Preparing and showing notification Future version protection
-    //#warning uncomment after testing
-
-    //    NSString *title = messageBannerView.title;
-    //    NSString *subtitle = messageBannerView.subTitle;
-    //    for (MBLMessageBannerView *n in [MBLMessageBanner sharedSingleton].messagesBannersList)
-    //    {
-    //        if (([n.title isEqualToString:title] || (!n.title && !title)) && ([n.subTitle isEqualToString:subtitle] || (!n.subTitle && !subtitle)))
-    //        {
-    //            // Add some check in the config file later if it allow multiple pop-ups
-    //            return;
-    //        }
-    //    }
-
+    
     [[MBLMessageBanner sharedSingleton].messagesBannersList addObject:messageBannerView];
 
     if ([[MBLMessageBanner sharedSingleton] messageOnScreen] == NO) {
@@ -392,26 +377,16 @@ static struct delegateMethodsCaching {
                 realViewController = viewController;
             }
             
-            if (realViewController.navigationController && realViewController.navigationController.navigationBarHidden == YES) {
-                
-                [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:realViewController.view
+            if (viewController.topLayoutGuide != nil) {
+                [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:viewController.view
                                                                                 attribute:NSLayoutAttributeTop
                                                                                 relatedBy:NSLayoutRelationEqual
                                                                                    toItem:message
                                                                                 attribute:NSLayoutAttributeTop
                                                                                multiplier:1.0f
                                                                                  constant:0.0f]];
-            } else {
-                if (![realViewController.view isDescendantOfView:viewController.view]) {
-                    [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:viewController.view
-                                                                                    attribute:NSLayoutAttributeTop
-                                                                                    relatedBy:NSLayoutRelationEqual
-                                                                                       toItem:message
-                                                                                    attribute:NSLayoutAttributeTop
-                                                                                   multiplier:1.0f
-                                                                                     constant:0.0f]];
-                }
-                else if (realViewController.topLayoutGuide == nil && realViewController.navigationController.navigationBar != nil) {
+            } else if ([realViewController.view isDescendantOfView:viewController.view]) {
+                if (realViewController.navigationController.navigationBar != nil) {
                     // This is a hack!!! iOS 9 the topLayoutGuide goes away and shows as nil in Reveal
                     [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:realViewController.navigationController.navigationBar
                                                                                     attribute:NSLayoutAttributeBottom
@@ -420,17 +395,23 @@ static struct delegateMethodsCaching {
                                                                                     attribute:NSLayoutAttributeTop
                                                                                    multiplier:1.0f
                                                                                      constant:0.0f]];
-                } else if(realViewController.topLayoutGuide != nil) {
-                    [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:realViewController.topLayoutGuide
-                                                                                    attribute:NSLayoutAttributeBottom
+                } else {
+                    [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:realViewController.view
+                                                                                    attribute:NSLayoutAttributeTop
                                                                                     relatedBy:NSLayoutRelationEqual
                                                                                        toItem:message
                                                                                     attribute:NSLayoutAttributeTop
                                                                                    multiplier:1.0f
                                                                                      constant:0.0f]];
                 }
-                
-                
+            } else {
+                [viewController.view addConstraint:[NSLayoutConstraint constraintWithItem:viewController.view
+                                                                                attribute:NSLayoutAttributeTop
+                                                                                relatedBy:NSLayoutRelationEqual
+                                                                                   toItem:message
+                                                                                attribute:NSLayoutAttributeTop
+                                                                               multiplier:1.0f
+                                                                                 constant:0.0f]];
             }
             break;
         }
@@ -495,6 +476,37 @@ static struct delegateMethodsCaching {
 
 }
 
+- (CGAffineTransform)transformForMessageBanner:(MBLMessageBannerView *)message withGesture:(UIGestureRecognizer *)gesture
+{
+    switch (message.position) {
+        case MBLMessageBannerPositionTop: {
+            return CGAffineTransformMakeTranslation(0, -message.bounds.size.height);
+            break;
+        }
+        case MBLMessageBannerPositionCenter: {
+            if ([gesture isKindOfClass:[UISwipeGestureRecognizer class]]) {
+                
+                UISwipeGestureRecognizer *swipeGesture = (UISwipeGestureRecognizer*)gesture;
+                if (swipeGesture.direction == UISwipeGestureRecognizerDirectionRight) {
+                    return CGAffineTransformMakeTranslation(message.bounds.size.width, 0);
+                } else {
+                    return CGAffineTransformMakeTranslation(-message.bounds.size.width, 0);
+                }
+            } else {
+                return CGAffineTransformMakeTranslation(-message.bounds.size.width, 0);
+            }
+            break;
+        }
+        case MBLMessageBannerPositionBottom: {
+            return CGAffineTransformMakeTranslation(0, message.bounds.size.height);
+            break;
+        }
+        default:
+            return CGAffineTransformIdentity;
+            break;
+    }
+}
+
 - (void)showMessageBannerOnScreen {
     
     _messageOnScreen = YES;
@@ -513,17 +525,15 @@ static struct delegateMethodsCaching {
     
     [currentMessageBanner setBlur];
     
-    // Has side effects? setting center = target is really not needed as this is
-    // using constraints which overrides setting the center. I would drop this
-    // altogether except that there are side effects in calculateTargetCenter:
-    // that are needed.
-    CGPoint target = [self calculateTargetCenter:currentMessageBanner];
+    [self attachMessageView:currentMessageBanner];
+    
+    UIViewController* parentViewController = [self getParentViewController:currentMessageBanner];
+    [self attachBannerConstraints:currentMessageBanner onViewController:parentViewController];
+    [parentViewController.view layoutIfNeeded];
+    currentMessageBanner.transform = [self transformForMessageBanner:currentMessageBanner withGesture:nil];
     
     [UIView animateKeyframesWithDuration:ANIMATION_DURATION delay:0.0f options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:^{
-        UIViewController* parentViewController = [self getParentViewController:currentMessageBanner];
-        [self attachBannerConstraints:currentMessageBanner onViewController:parentViewController];
-        currentMessageBanner.center = target; // This fights constraints and is not needed.
-        [parentViewController.view layoutIfNeeded];        
+        currentMessageBanner.transform = CGAffineTransformIdentity;
     } completion:^(BOOL finished) {
         
         currentMessageBanner.isBannerDisplayed = YES;
@@ -583,45 +593,10 @@ static struct delegateMethodsCaching {
     
     [message unsetBlur];
     
-    CGPoint fadeOutCenter = CGPointMake(0, 0);
-    
-    switch (message.position) {
-        case MBLMessageBannerPositionTop:
-            fadeOutCenter = CGPointMake(  message.center.x
-                                        , -(message.frame.size.height / 2.0f) );
-            break;
-        case MBLMessageBannerPositionBottom:
-            fadeOutCenter = CGPointMake(  message.center.x
-                                        , message.viewController.view.bounds.size.height + (message.frame.size.height / 2.0f) );
-            break;
-        case MBLMessageBannerPositionCenter:
-            if ([gesture isKindOfClass:[UISwipeGestureRecognizer class]]) {
-                
-                UISwipeGestureRecognizer *swipeGesture = (UISwipeGestureRecognizer*)gesture;
-                switch (swipeGesture.direction) {
-                        
-                    case UISwipeGestureRecognizerDirectionLeft:
-                        fadeOutCenter = CGPointMake(  -(message.center.x)
-                                                    , message.center.y);
-                        break;
-                    case UISwipeGestureRecognizerDirectionRight:
-                        fadeOutCenter = CGPointMake(  message.center.x + message.viewController.view.bounds.size.width
-                                                    , message.center.y);
-                    default:
-                        break;
-                }
-            } else {
-                fadeOutCenter = CGPointMake(  -(message.center.x)
-                                            , message.center.y);
-            }
-            break;
-            
-        default:
-            break;
-    }
+    CGAffineTransform fadeOutTransform = [self transformForMessageBanner:message withGesture:gesture];
     
     [UIView animateWithDuration:ANIMATION_DURATION animations:^{
-        [message setCenter:fadeOutCenter];
+        message.transform = fadeOutTransform;
     } completion:^(BOOL finished) {
         [message removeFromSuperview];
         [[[MBLMessageBanner sharedSingleton] messagesBannersList] removeObjectAtIndex:0];
@@ -678,48 +653,11 @@ static struct delegateMethodsCaching {
 
 #pragma mark -
 #pragma mark Calculate new center methods
-- (CGFloat) getStatusBarSize {
-    BOOL isPortrait = UIInterfaceOrientationIsPortrait([[UIApplication sharedApplication] statusBarOrientation]);
-    CGSize statusBarSize = [UIApplication sharedApplication].statusBarFrame.size;
-    CGFloat offset = isPortrait ? statusBarSize.height : statusBarSize.width;
-    
-    return (offset);
-}
 
--(CGFloat)calculateTopOffsetAndAttachView:(MBLMessageBannerView *)message {
-    CGFloat topOffset = 0.0f;
+- (void)attachMessageView:(MBLMessageBannerView *)message {
     
-    // If has a navigationController
-    if ([self isViewControllerOrParentViewControllerNavigationController:message]) {
-        
-        // Getting the current view Controller
-        UINavigationController *currentNavigationController;
-        if ([self isViewControllerNavigationController:message]) {
-            currentNavigationController = (UINavigationController *)message.viewController;
-        } else {
-            currentNavigationController = (UINavigationController *)message.viewController.parentViewController;
-        }
-        
-        // If the navigationBar is visible we add his height as an offset
-        if ([self isNavigationBarVisible:currentNavigationController]) {
-            // Adding the view on the navcontroller
-            [currentNavigationController.view insertSubview:message belowSubview:[currentNavigationController navigationBar]];
-            
-            topOffset += [currentNavigationController navigationBar].bounds.size.height;
-        } else {
-            [message.viewController.view addSubview:message];
-        }
-    } else {
-        [message.viewController.view addSubview:message];
-    }
-    topOffset += [self getStatusBarSize];
-    return topOffset;
-}
-
--(CGFloat)calculateBottomOffsetAndAttachView:(MBLMessageBannerView *)message {
-    CGFloat bottomOffset = 0.0f;
     UINavigationController *currentNavigationController;
-
+    
     if ([self isViewControllerOrParentViewControllerNavigationController:message]) {
         
         // Getting the current view Controller
@@ -732,39 +670,34 @@ static struct delegateMethodsCaching {
         currentNavigationController = message.viewController.navigationController;
     }
     
-    if ([self isToolBarHidden:currentNavigationController]) {
-        bottomOffset = (currentNavigationController.toolbar.frame.size.height);
-        [currentNavigationController.view insertSubview:message belowSubview:currentNavigationController.toolbar];
-    } else {
-        [message.viewController.view addSubview:message];
-    }
-    return bottomOffset;
-}
-
-
-- (CGPoint)calculateTargetCenter:(MBLMessageBannerView *)message {
-    CGPoint result;
-    
     switch (message.position) {
         case MBLMessageBannerPositionTop:
-            result = CGPointMake(  message.center.x
-                                 , (message.frame.size.height / 2.0f) + [self calculateTopOffsetAndAttachView:message]);
+                
+            // If the navigationBar is visible
+            if ([self isNavigationBarVisible:currentNavigationController]) {
+                // Adding the view on the navcontroller
+                [currentNavigationController.view insertSubview:message belowSubview:[currentNavigationController navigationBar]];
+            } else {
+                [message.viewController.view addSubview:message];
+            }
             break;
         case MBLMessageBannerPositionBottom:
-            result = CGPointMake( message.center.x, message.viewController.view.frame.size.height - ((message.frame.size.height / 2.0f) + [self calculateBottomOffsetAndAttachView:message]));
+            
+            // If the toolBar is visible
+            if ([self isToolBarHidden:currentNavigationController]) {
+                [currentNavigationController.view insertSubview:message belowSubview:currentNavigationController.toolbar];
+            } else {
+                [message.viewController.view addSubview:message];
+            }
             break;
         case MBLMessageBannerPositionCenter:
             
             // Adding the popup to the view
             [message.viewController.view addSubview:message];
-            
-            result = CGPointMake(  message.viewController.view.center.x
-                                 , message.center.y);
             break;
         default:
             break;
     }
-    return (result);
 }
 
 #pragma mark -
@@ -780,12 +713,13 @@ static struct delegateMethodsCaching {
 }
 
 - (BOOL)isNavigationBarVisible:(UINavigationController *)currentNavigationController {
-    return (![currentNavigationController isNavigationBarHidden] &&
+    return (currentNavigationController != nil &&
+            ![currentNavigationController isNavigationBarHidden] &&
             ![[currentNavigationController navigationBar] isHidden]);
 }
 
 - (BOOL)isToolBarHidden:(UINavigationController *)currentNavigationController {
-    return (currentNavigationController && currentNavigationController.isToolbarHidden == NO);
+    return (currentNavigationController != nil && currentNavigationController.isToolbarHidden == NO);
 }
 
 @end
