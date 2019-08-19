@@ -553,7 +553,7 @@ static struct delegateMethodsCaching {
     return [self hideMessageBannerWithCompletion:nil];
 }
 
-+ (BOOL) hideMessageBannerWithCompletion:(void (^)())completion {
++ (BOOL) hideMessageBannerWithCompletion:(void (^)(void))completion {
     BOOL success = NO;
     
     if ([[[MBLMessageBanner sharedSingleton] messagesBannersList] count]) {
@@ -577,7 +577,7 @@ static struct delegateMethodsCaching {
 #pragma mark -
 #pragma mark Fade-out Message Banner methods
 
-- (void) hideMessageBanner:(MBLMessageBannerView *)message withGesture:(UIGestureRecognizer *)gesture andCompletion:(void (^)())completion {
+- (void) hideMessageBanner:(MBLMessageBannerView *)message withGesture:(UIGestureRecognizer *)gesture andCompletion:(void (^)(void))completion {
     
     //    Removing timer Callback
     message.isBannerDisplayed = NO;
