@@ -253,6 +253,6 @@ typedef NS_ENUM(NSInteger, MBLMessageBannerDuration) {
  @retval NO if there is no message banner to hide
  @retval YES if a message banner has been hiden
  */
-+ (BOOL) hideMessageBannerWithCompletion:(void (^)())completion;
++ (BOOL) hideMessageBannerWithCompletion:(void (^)(void))completion;
 
 @end
